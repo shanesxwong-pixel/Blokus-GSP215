@@ -1,0 +1,886 @@
+<!-- Spec: Blokus Nexus / 4-Player Blokus Strategy Game & Conflict Management Simulator / Pass-and-Play & AI opponents, Power Cards, Lo-Fi Audio Generator, Game Recording, Scenario Debriefs / Saved Data: blokus_high_scores, blokus_game_history / last updated 2026-10-16 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Blokus Nexus - Strategy & Conflict Simulator</title>
+  <script src="storage.js"></script>
+  <style>
+    :root {
+      --bg-color: #12141a;
+      --card-bg: #1c1f28;
+      --card-border: #2e3440;
+      --text-main: #edebe8;
+      --text-muted: #9aa0a6;
+      --p1-color: #3b82f6;
+      --p2-color: #ef4444;
+      --p3-color: #10b981;
+      --p4-color: #f59e0b;
+      --p1-bg: rgba(59, 130, 246, 0.2);
+      --p2-bg: rgba(239, 68, 68, 0.2);
+      --p3-bg: rgba(16, 185, 129, 0.2);
+      --p4-bg: rgba(245, 158, 11, 0.2);
+      --accent: #8b5cf6;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg-color: #f3f4f6;
+        --card-bg: #ffffff;
+        --card-border: #e5e7eb;
+        --text-main: #1f2937;
+        --text-muted: #6b7280;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    /* Screen Management */
+    .screen {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      padding: 16px;
+      position: absolute;
+      top: 0;
+      left: 0;
+      background: var(--bg-color);
+    }
+
+    .screen.active {
+      display: flex;
+    }
+
+    /* Header & Navigation */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .btn {
+      background: var(--card-bg);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn:active {
+      transform: scale(0.96);
+      opacity: 0.8;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+    }
+
+    .btn-sm {
+      padding: 4px 8px;
+      font-size: 0.75rem;
+    }
+
+    /* Setup Form */
+    .setup-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .setup-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text-main);
+    }
+
+    .player-setup-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .player-row.p1 { border-left: 4px solid var(--p1-color); }
+    .player-row.p2 { border-left: 4px solid var(--p2-color); }
+    .player-row.p3 { border-left: 4px solid var(--p3-color); }
+    .player-row.p4 { border-left: 4px solid var(--p4-color); }
+
+    select, input[type="text"] {
+      background: var(--bg-color);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    /* Main Game Layout */
+    #game-screen {
+      padding: 8px;
+      overflow: hidden;
+    }
+
+    .game-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .player-turn-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .turn-badge {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .board-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      touch-action: none;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(20, 1fr);
+      grid-template-rows: repeat(20, 1fr);
+      gap: 1px;
+      background: var(--card-border);
+      border: 2px solid var(--card-border);
+      border-radius: 4px;
+      width: 100%;
+      max-width: 90vh;
+      aspect-ratio: 1;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+
+    .cell {
+      background: var(--card-bg);
+      transition: background-color 0.1s;
+    }
+
+    .cell.p1 { background: var(--p1-color); }
+    .cell.p2 { background: var(--p2-color); }
+    .cell.p3 { background: var(--p3-color); }
+    .cell.p4 { background: var(--p4-color); }
+
+    .cell.preview-valid { background: rgba(16, 185, 129, 0.6) !important; }
+    .cell.preview-invalid { background: rgba(239, 68, 68, 0.6) !important; }
+
+    /* Piece Selection Area */
+    .piece-rack {
+      height: 110px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 8px;
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      align-items: center;
+      margin-top: 8px;
+      flex-shrink: 0;
+    }
+
+    .piece-card {
+      background: var(--bg-color);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 70px;
+      height: 85px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .piece-card.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    .piece-grid {
+      display: grid;
+      gap: 2px;
+    }
+
+    .piece-mini-cell {
+      width: 10px;
+      height: 10px;
+      border-radius: 1px;
+    }
+
+    /* Controls & Power Cards */
+    .game-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+      gap: 6px;
+    }
+
+    .power-cards-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+    }
+
+    .power-btn {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* Audio Player Widget */
+    .lofi-widget {
+      position: fixed;
+      bottom: 80px;
+      right: 12px;
+      background: rgba(28, 31, 40, 0.9);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--card-border);
+      padding: 8px 12px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    /* Modal / Debrief overlay */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 400px;
+      padding: 20px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    /* Error Toast */
+    #error-toast {
+      display: none;
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      background: #ef4444;
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      z-index: 1000;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Home / Setup Screen -->
+    <div id="screen-setup" class="screen active">
+      <header>
+        <h1>Blokus Nexus</h1>
+        <button class="btn btn-sm" onclick="showHistory()">📊 History</button>
+      </header>
+
+      <div class="setup-card">
+        <div class="setup-title">🎮 Player Setup</div>
+        <div class="player-setup-grid">
+          <div class="player-row p1">
+            <span>Blue (P1)</span>
+            <select id="p1-type">
+              <option value="human">Human (Pass & Play)</option>
+              <option value="ai">AI (Normal)</option>
+            </select>
+          </div>
+          <div class="player-row p2">
+            <span>Red (P2)</span>
+            <select id="p2-type">
+              <option value="ai" selected>AI (Normal)</option>
+              <option value="human">Human (Pass & Play)</option>
+            </select>
+          </div>
+          <div class="player-row p3">
+            <span>Green (P3)</span>
+            <select id="p3-type">
+              <option value="ai" selected>AI (Normal)</option>
+              <option value="human">Human (Pass & Play)</option>
+            </select>
+          </div>
+          <div class="player-row p4">
+            <span>Yellow (P4)</span>
+            <select id="p4-type">
+              <option value="ai" selected>AI (Normal)</option>
+              <option value="human">Human (Pass & Play)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="setup-card">
+        <div class="setup-title">⚔️ Conflict Mode / Scenario</div>
+        <select id="scenario-mode" style="width: 100%;">
+          <option value="standard">Standard Free-for-All</option>
+          <option value="destructive">Aggressive / Territorial Push</option>
+          <option value="collaborative">Collaborative / Corner Sharing</option>
+        </select>
+      </div>
+
+      <button class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 1rem; margin-top: auto;" onclick="startGame()">
+        🚀 Start Simulation
+      </button>
+    </div>
+
+    <!-- Gameplay Screen -->
+    <div id="screen-game" class="screen">
+      <div class="game-header">
+        <div class="player-turn-indicator">
+          <div id="turn-badge" class="turn-badge"></div>
+          <span id="turn-text">Player Turn</span>
+        </div>
+        <div>
+          <button class="btn btn-sm" onclick="toggleAudio()">🎧 Lo-Fi</button>
+          <button class="btn btn-sm" onclick="confirmEndGame()">End</button>
+        </div>
+      </div>
+
+      <div class="board-container">
+        <div id="board" class="board"></div>
+      </div>
+
+      <!-- Controls & Power-ups -->
+      <div class="game-controls">
+        <div class="power-cards-bar">
+          <button class="power-btn" onclick="rotateSelectedPiece()">🔄 Rotate</button>
+          <button class="power-btn" onclick="flipSelectedPiece()">🪞 Flip</button>
+          <button class="power-btn" style="background: #10b981;" onclick="passTurn()">⏭️ Pass</button>
+        </div>
+      </div>
+
+      <!-- Available Pieces -->
+      <div id="piece-rack" class="piece-rack"></div>
+    </div>
+
+    <!-- History Screen -->
+    <div id="screen-history" class="screen">
+      <header>
+        <h1>Match History & Debriefs</h1>
+        <button class="btn btn-sm" onclick="navigateTo('screen-setup')">Back</button>
+      </header>
+      <div id="history-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+    </div>
+
+    <!-- Debrief Modal -->
+    <div id="debrief-modal" class="modal-overlay">
+      <div class="modal">
+        <h2 style="margin-bottom: 12px;" id="debrief-title">Match Concluded</h2>
+        <div id="debrief-stats" style="margin-bottom: 16px; font-size: 0.9rem; line-height: 1.5;"></div>
+        <button class="btn btn-primary" style="width: 100%;" onclick="closeDebrief()">Return to Home</button>
+      </div>
+    </div>
+
+    <!-- Audio Player -->
+    <div class="lofi-widget" id="lofi-widget" style="display: none;">
+      <span style="font-size: 0.8rem;">🎶 Lo-Fi Beat Synth</span>
+      <button class="btn btn-sm" onclick="toggleAudio()">Stop</button>
+    </div>
+
+    <!-- Error Toast -->
+    <div id="error-toast" onclick="copyErrorText()"></div>
+  </div>
+
+  <script>
+    // Spec & Error handling
+    window.addEventListener("error", (e) => showError(e.message));
+    window.addEventListener("unhandledrejection", (e) => showError(e.reason));
+
+    function showError(msg) {
+      const toast = document.getElementById("error-toast");
+      toast.innerText = "Error: " + msg + " (Tap to copy)";
+      toast.style.display = "block";
+    }
+
+    function copyErrorText() {
+      const toast = document.getElementById("error-toast");
+      navigator.clipboard.writeText(toast.innerText);
+      alert("Error log copied!");
+    }
+
+    // Standard 21 Blokus Polyominoes definitions
+    const SHAPES = [
+      [[1]], // 1 Monomino
+      [[1,1]], // 2 Domino
+      [[1,1,1]], [[1,1],[0,1]], // 3 Triominoes
+      [[1,1,1,1]], [[1,1,1],[0,1,0]], [[1,1,1],[1,0,0]], [[1,1],[1,1]], [[0,1,1],[1,1,0]], // 4 Tetrominoes
+      [[1,1,1,1,1]], [[1,1,1,1],[1,0,0,0]], [[1,1,1,1],[0,1,0,0]], [[1,1,1],[1,1,0]], // 5 Pentominoes
+      [[1,1,1],[1,0,1]], [[1,1,1],[0,1,1]], [[1,0,0],[1,1,1],[0,0,1]], [[0,1,0],[1,1,1],[0,1,0]],
+      [[1,1,0],[0,1,1],[0,0,1]], [[1,1,0],[0,1,0],[0,1,1]], [[0,1,1],[1,1,0],[0,1,0]], [[1,1,1],[0,0,1],[0,0,1]]
+    ];
+
+    // Game state
+    let board = Array(20).fill(0).map(() => Array(20).fill(0));
+    let players = [
+      { id: 1, name: "Blue", color: "var(--p1-color)", type: "human", pieces: [...Array(21).keys()], passed: false, score: 0 },
+      { id: 2, name: "Red", color: "var(--p2-color)", type: "ai", pieces: [...Array(21).keys()], passed: false, score: 0 },
+      { id: 3, name: "Green", color: "var(--p3-color)", type: "ai", pieces: [...Array(21).keys()], passed: false, score: 0 },
+      { id: 4, name: "Yellow", color: "var(--p4-color)", type: "ai", pieces: [...Array(21).keys()], passed: false, score: 0 }
+    ];
+    let currentTurn = 0; // 0 to 3
+    let selectedPieceIdx = null;
+    let currentPieceMatrix = null;
+    let isAudioPlaying = false;
+    let audioCtx = null;
+
+    // Navigation & History Management
+    window.addEventListener("popstate", (e) => {
+      if (e.state && e.state.screen) {
+        switchScreen(e.state.screen, false);
+      }
+    });
+
+    function navigateTo(screenId) {
+      history.pushState({ screen: screenId }, "");
+      switchScreen(screenId, false);
+    }
+
+    function switchScreen(screenId, isReplace = true) {
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      document.getElementById(screenId).classList.add("active");
+      if (isReplace) history.replaceState({ screen: screenId }, "");
+    }
+
+    // Initialization
+    function initBoardUI() {
+      const boardEl = document.getElementById("board");
+      boardEl.innerHTML = "";
+      for (let r = 0; r < 20; r++) {
+        for (let c = 0; c < 20; c++) {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.dataset.r = r;
+          cell.dataset.c = c;
+          cell.addEventListener("pointerdown", () => handleCellClick(r, c));
+          boardEl.appendChild(cell);
+        }
+      }
+    }
+
+    function startGame() {
+      players[0].type = document.getElementById("p1-type").value;
+      players[1].type = document.getElementById("p2-type").value;
+      players[2].type = document.getElementById("p3-type").value;
+      players[3].type = document.getElementById("p4-type").value;
+
+      board = Array(20).fill(0).map(() => Array(20).fill(0));
+      players.forEach(p => { p.pieces = [...Array(21).keys()]; p.passed = false; p.score = 0; });
+      currentTurn = 0;
+
+      initBoardUI();
+      navigateTo("screen-game");
+      updateTurnUI();
+
+      if (players[currentTurn].type === "ai") {
+        setTimeout(playAITurn, 500);
+      }
+    }
+
+    function updateTurnUI() {
+      const p = players[currentTurn];
+      document.getElementById("turn-badge").style.background = p.color;
+      document.getElementById("turn-text").innerText = `${p.name}'s Turn (${p.type.toUpperCase()})`;
+      renderPieceRack();
+    }
+
+    function renderPieceRack() {
+      const rack = document.getElementById("piece-rack");
+      rack.innerHTML = "";
+      const p = players[currentTurn];
+
+      if (p.type === "ai") {
+        rack.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; margin: auto;">AI is thinking...</div>`;
+        return;
+      }
+
+      p.pieces.forEach(shapeIdx => {
+        const card = document.createElement("div");
+        card.className = `piece-card ${selectedPieceIdx === shapeIdx ? "selected" : ""}`;
+        card.onclick = () => selectPiece(shapeIdx);
+
+        const shape = SHAPES[shapeIdx];
+        const grid = document.createElement("div");
+        grid.className = "piece-grid";
+        grid.style.gridTemplateColumns = `repeat(${shape[0].length}, 10px)`;
+
+        shape.forEach(row => {
+          row.forEach(cell => {
+            const mini = document.createElement("div");
+            mini.className = "piece-mini-cell";
+            if (cell) mini.style.background = p.color;
+            grid.appendChild(mini);
+          });
+        });
+
+        card.appendChild(grid);
+        rack.appendChild(card);
+      });
+    }
+
+    function selectPiece(idx) {
+      selectedPieceIdx = idx;
+      currentPieceMatrix = SHAPES[idx];
+      renderPieceRack();
+    }
+
+    function rotateSelectedPiece() {
+      if (!currentPieceMatrix) return;
+      const rows = currentPieceMatrix.length;
+      const cols = currentPieceMatrix[0].length;
+      let rotated = Array(cols).fill(0).map(() => Array(rows).fill(0));
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          rotated[c][rows - 1 - r] = currentPieceMatrix[r][c];
+        }
+      }
+      currentPieceMatrix = rotated;
+    }
+
+    function flipSelectedPiece() {
+      if (!currentPieceMatrix) return;
+      currentPieceMatrix = currentPieceMatrix.map(row => [...row].reverse());
+    }
+
+    // Move Validation Logic
+    function isValidMove(b, pId, matrix, startR, startC) {
+      const rows = matrix.length;
+      const cols = matrix[0].length;
+      let touchesCorner = false;
+
+      // Starting corners for P1, P2, P3, P4
+      const corners = [[0,0], [0,19], [19,19], [19,0]];
+      const startCorner = corners[pId - 1];
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (matrix[r][c] === 1) {
+            const br = startR + r;
+            const bc = startC + c;
+
+            if (br < 0 || br >= 20 || bc < 0 || bc >= 20) return false; // Out of bounds
+            if (b[br][bc] !== 0) return false; // Overlap
+
+            // Check edge collisions (Same color cannot touch edges)
+            const edges = [[br-1, bc], [br+1, bc], [br, bc-1], [br, bc+1]];
+            for (let [er, ec] of edges) {
+              if (er >= 0 && er < 20 && ec >= 0 && ec < 20) {
+                if (b[er][ec] === pId) return false;
+              }
+            }
+
+            // Check first move corner or diagonal touch
+            if (br === startCorner[0] && bc === startCorner[1]) {
+              touchesCorner = true;
+            }
+
+            const diagCorners = [[br-1, bc-1], [br-1, bc+1], [br+1, bc-1], [br+1, bc+1]];
+            for (let [dr, dc] of diagCorners) {
+              if (dr >= 0 && dr < 20 && dc >= 0 && dc < 20) {
+                if (b[dr][dc] === pId) touchesCorner = true;
+              }
+            }
+          }
+        }
+      }
+      return touchesCorner;
+    }
+
+    function handleCellClick(r, c) {
+      const p = players[currentTurn];
+      if (p.type === "ai" || selectedPieceIdx === null) return;
+
+      if (isValidMove(board, p.id, currentPieceMatrix, r, c)) {
+        placePiece(p.id, currentPieceMatrix, r, c);
+        p.pieces = p.pieces.filter(idx => idx !== selectedPieceIdx);
+        selectedPieceIdx = null;
+        currentPieceMatrix = null;
+        advanceTurn();
+      }
+    }
+
+    function placePiece(pId, matrix, startR, startC) {
+      for (let r = 0; r < matrix.length; r++) {
+        for (let c = 0; c < matrix[0].length; c++) {
+          if (matrix[r][c] === 1) {
+            board[startR + r][startC + c] = pId;
+            const cell = document.querySelector(`.cell[data-r="${startR + r}"][data-c="${startC + c}"]`);
+            if (cell) cell.className = `cell p${pId}`;
+          }
+        }
+      }
+    }
+
+    function passTurn() {
+      players[currentTurn].passed = true;
+      advanceTurn();
+    }
+
+    function advanceTurn() {
+      if (players.every(p => p.passed || p.pieces.length === 0)) {
+        endGame();
+        return;
+      }
+
+      do {
+        currentTurn = (currentTurn + 1) % 4;
+      } while (players[currentTurn].passed && !players.every(p => p.passed));
+
+      updateTurnUI();
+
+      if (players[currentTurn].type === "ai" && !players[currentTurn].passed) {
+        setTimeout(playAITurn, 400);
+      }
+    }
+
+    // Basic Strategy AI
+    function playAITurn() {
+      const p = players[currentTurn];
+      let validMoves = [];
+
+      p.pieces.forEach(pieceIdx => {
+        let shape = SHAPES[pieceIdx];
+        for (let rot = 0; rot < 4; rot++) {
+          for (let r = 0; r < 20; r++) {
+            for (let c = 0; c < 20; c++) {
+              if (isValidMove(board, p.id, shape, r, c)) {
+                validMoves.push({ pieceIdx, shape, r, c });
+              }
+            }
+          }
+          // Rotate matrix
+          shape = rotateMatrix(shape);
+        }
+      });
+
+      if (validMoves.length > 0) {
+        // AI prefers placing larger pieces first
+        validMoves.sort((a, b) => countBlocks(b.shape) - countBlocks(a.shape));
+        const move = validMoves[0];
+        placePiece(p.id, move.shape, move.r, move.c);
+        p.pieces = p.pieces.filter(idx => idx !== move.pieceIdx);
+      } else {
+        p.passed = true;
+      }
+
+      advanceTurn();
+    }
+
+    function rotateMatrix(mat) {
+      const rows = mat.length, cols = mat[0].length;
+      let res = Array(cols).fill(0).map(() => Array(rows).fill(0));
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) res[c][rows - 1 - r] = mat[r][c];
+      }
+      return res;
+    }
+
+    function countBlocks(mat) {
+      return mat.flat().reduce((a, b) => a + b, 0);
+    }
+
+    // Audio Generator (Procedural Lo-Fi Ambient)
+    function toggleAudio() {
+      const widget = document.getElementById("lofi-widget");
+      if (!isAudioPlaying) {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        isAudioPlaying = true;
+        widget.style.display = "flex";
+        playLoFiBeat();
+      } else {
+        isAudioPlaying = false;
+        widget.style.display = "none";
+      }
+    }
+
+    function playLoFiBeat() {
+      if (!isAudioPlaying) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(220 + Math.random() * 80, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 1.5);
+      setTimeout(playLoFiBeat, 2000);
+    }
+
+    // Game End & Debrief Logic
+    async function endGame() {
+      players.forEach(p => {
+        const remainingBlocks = p.pieces.reduce((sum, idx) => sum + countBlocks(SHAPES[idx]), 0);
+        p.score = -remainingBlocks; // Blokus scoring formula
+      });
+
+      players.sort((a, b) => b.score - a.score);
+
+      const statsEl = document.getElementById("debrief-stats");
+      statsEl.innerHTML = players.map((p, idx) => `
+        <div style="display:flex; justify-content:space-between; margin-bottom: 6px;">
+          <span>#${idx+1} ${p.name}:</span>
+          <strong>${p.score} pts</strong>
+        </div>
+      `).join("");
+
+      document.getElementById("debrief-modal").classList.add("active");
+
+      // Save to Storage API
+      try {
+        if (window.Storage) {
+          let history = (await Storage.get("blokus_game_history")) || [];
+          history.unshift({
+            date: new Date().toLocaleDateString(),
+            winner: players[0].name,
+            scores: players.map(p => `${p.name}: ${p.score}`)
+          });
+          await Storage.set("blokus_game_history", history.slice(0, 10));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function closeDebrief() {
+      document.getElementById("debrief-modal").classList.remove("active");
+      navigateTo("screen-setup");
+    }
+
+    async function showHistory() {
+      navigateTo("screen-history");
+      const list = document.getElementById("history-list");
+      list.innerHTML = "Loading...";
+
+      try {
+        let history = [];
+        if (window.Storage) {
+          history = (await Storage.get("blokus_game_history")) || [];
+        }
+
+        if (history.length === 0) {
+          list.innerHTML = `<div style="color: var(--text-muted);">No match history available yet.</div>`;
+          return;
+        }
+
+        list.innerHTML = history.map(item => `
+          <div class="setup-card">
+            <div style="font-weight: bold; margin-bottom: 4px;">Winner: ${item.winner} (${item.date})</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">${item.scores.join(" | ")}</div>
+          </div>
+        `).join("");
+      } catch (e) {
+        list.innerHTML = "Failed to load history.";
+      }
+    }
+
+    function confirmEndGame() {
+      if (confirm("End current simulation and debrief?")) endGame();
+    }
+  </script>
+</body>
+</html>
